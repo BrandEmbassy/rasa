@@ -1,9 +1,59 @@
-# The default Docker image
-ARG IMAGE_BASE_NAME
-ARG BASE_IMAGE_HASH
-ARG BASE_BUILDER_IMAGE_HASH
+# The base image used for all images
+FROM ubuntu:20.04
 
-FROM ${IMAGE_BASE_NAME}:base-builder-${BASE_BUILDER_IMAGE_HASH} as builder
+ENV DEBIAN_FRONTEND="noninteractive"
+
+RUN apt-get update -qq && \
+  apt-get install -y --no-install-recommends \
+  python3 \
+  python3-venv \
+  python3-pip \
+  python3-dev \
+  # required by psycopg2 at build and runtime
+  libpq-dev \
+  # required for health check
+  curl \
+  && apt-get autoremove -y
+
+# Make sure that all security updates are installed
+RUN apt-get update && apt-get dist-upgrade -y --no-install-recommends
+
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 100 \
+   && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 100
+
+# Create rasa user and group
+RUN useradd -rm -d /app -s /sbin/nologin -g root -u 1001 rasa && groupadd -g 1001 rasa
+
+FROM rasa:base-localdev
+
+# install poetry
+ENV POETRY_VERSION 1.1.13
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH "/root/.local/bin:${PATH}"
+
+# The base builder image used for all images
+FROM rasa:base-poetry-1.1.13
+
+RUN apt-get update -qq && \
+  apt-get install -y --no-install-recommends \
+  build-essential \
+  wget \
+  openssh-client \
+  graphviz-dev \
+  pkg-config \
+  git-core \
+  openssl \
+  libssl-dev \
+  libffi7 \
+  libffi-dev \
+  libpng-dev \
+  && apt-get autoremove -y
+
+# Make sure that all security updates are installed
+RUN apt-get update && apt-get dist-upgrade -y --no-install-recommends
+
+# The default Docker image
+FROM rasa:base-builder-localdev as builder
 # copy files
 COPY . /build/
 
@@ -13,14 +63,14 @@ WORKDIR /build
 # install dependencies
 RUN python -m venv /opt/venv && \
   . /opt/venv/bin/activate && \
-  pip install --no-cache-dir -U "pip==21.*" && \
+  pip install --no-cache-dir -U "pip==22.*" -U "wheel>0.38.0" && \
   poetry install --no-dev --no-root --no-interaction && \
   poetry build -f wheel -n && \
   pip install --no-deps dist/*.whl && \
   rm -rf dist *.egg-info
 
 # start a new build stage
-FROM ${IMAGE_BASE_NAME}:base-${BASE_IMAGE_HASH} as runner
+FROM rasa:base-localdev as runner
 
 # copy everything from /opt
 COPY --from=builder /opt/venv /opt/venv
