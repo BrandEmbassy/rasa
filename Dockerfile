@@ -1,4 +1,4 @@
-# The base image used for all images
+FROM 563770389081.dkr.ecr.eu-west-1.amazonaws.com/intermediate:27 as intermediate
 FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND="noninteractive"
@@ -86,6 +86,50 @@ ENV HOME=/app
 # update permissions & change user to not run as root
 WORKDIR /app
 RUN chgrp -R 0 /app && chmod -R g=u /app && chmod o+wr /app
+
+USER root
+
+COPY --from=intermediate /usr/local/share/ca-certificates /usr/local/share/ca-certificates
+
+RUN [ `dpkg --print-architecture` = "amd64" ] && CPU_ARCH="x86_64" || CPU_ARCH="aarch64" && \
+    apt-get update -y && \
+    apt-get install --no-install-recommends --no-install-suggests -y unzip gettext-base jq vim busybox ca-certificates && \
+    for i in $(busybox --list); do ln -sf /usr/bin/busybox /usr/local/bin/$i; done && \
+    apt-get purge --auto-remove -y && rm -rf /var/lib/apt/lists/* /var/cache/apt/* && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-${CPU_ARCH}.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf aws awscliv2.zip && \
+    update-ca-certificates && \
+    apt-get clean && \
+    apt-get purge --auto-remove -y && \
+    rm -rf /tmp/* /var/cache/apt/* /var/lib/apt/lists/*
+
+## Create custom entrypoint
+COPY ./src/conf/entrypoints/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+
+## Copy over RASA config templates
+COPY ./src/conf/credentials.template /app/credentials.template
+COPY ./src/conf/endpoints.template /app/endpoints.template
+RUN chmod 644 /app/credentials.template && \
+    chmod 644 /app/endpoints.template
+
+COPY ./rasa-extras extras
+
+RUN sed -i 's/20.3.0/21.12.1/g' extras/requirements.txt
+RUN pip install -r extras/requirements.txt
+
+## Official image throws errors, below is a workaround
+RUN mkdir /.config && \
+    chown -R 1001 /.config && \
+    chmod -R 775 /.config
+USER 1001
+ENV MPLCONFIGDIR=/app/.config
+RUN mkdir -p /app/.config/
+RUN mkdir -p /app/training
+## end workaround
+
 USER 1001
 
 # create a volume for temporary data
