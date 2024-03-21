@@ -24,7 +24,8 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 100 \
 # Create rasa user and group
 RUN useradd -rm -d /app -s /sbin/nologin -g root -u 1001 rasa && groupadd -g 1001 rasa
 
-FROM rasa:base-localdev
+###
+FROM rasa/rasa:base-poetry-1.1.13
 
 # install poetry
 ENV POETRY_VERSION 1.1.13
@@ -32,7 +33,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH "/root/.local/bin:${PATH}"
 
 # The base builder image used for all images
-FROM rasa:base-poetry-1.1.13
+FROM rasa/rasa:base-poetry-1.1.13
 
 RUN apt-get update -qq && \
   apt-get install -y --no-install-recommends \
@@ -53,7 +54,7 @@ RUN apt-get update -qq && \
 RUN apt-get update && apt-get dist-upgrade -y --no-install-recommends
 
 # The default Docker image
-FROM rasa:base-builder-localdev as builder
+FROM rasa/rasa:base-builder-3f26326da9e19d8f5b2be68a8dd625490688e821328ecc454cadcf3f8f7999e4-poetry-1.1.13 as builder
 # copy files
 COPY . /build/
 
@@ -70,7 +71,8 @@ RUN python -m venv /opt/venv && \
   rm -rf dist *.egg-info
 
 # start a new build stage
-FROM rasa:base-localdev as runner
+###
+FROM rasa/rasa:base-poetry-1.1.13 as runner
 
 # copy everything from /opt
 COPY --from=builder /opt/venv /opt/venv
