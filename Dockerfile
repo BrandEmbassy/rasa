@@ -1,4 +1,6 @@
 FROM 563770389081.dkr.ecr.eu-west-1.amazonaws.com/intermediate:27 as intermediate
+
+# The base image used for all images
 FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND="noninteractive"
@@ -24,7 +26,6 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 100 \
 # Create rasa user and group
 RUN useradd -rm -d /app -s /sbin/nologin -g root -u 1001 rasa && groupadd -g 1001 rasa
 
-###
 FROM rasa/rasa:base-poetry-1.1.13
 
 # install poetry
@@ -71,7 +72,6 @@ RUN python -m venv /opt/venv && \
   rm -rf dist *.egg-info
 
 # start a new build stage
-###
 FROM rasa/rasa:base-poetry-1.1.13 as runner
 
 # copy everything from /opt
@@ -87,6 +87,7 @@ ENV HOME=/app
 WORKDIR /app
 RUN chgrp -R 0 /app && chmod -R g=u /app && chmod o+wr /app
 
+## Download needed apt packages and aws to be able to upload to s3
 USER root
 
 COPY --from=intermediate /usr/local/share/ca-certificates /usr/local/share/ca-certificates
@@ -128,7 +129,6 @@ USER 1001
 ENV MPLCONFIGDIR=/app/.config
 RUN mkdir -p /app/.config/
 RUN mkdir -p /app/training
-## end workaround
 
 USER 1001
 
