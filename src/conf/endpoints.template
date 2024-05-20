@@ -1,0 +1,37 @@
+action_endpoint:
+  url: ${RASA_ACTION_ENDPOINT_URL}
+  headers:
+    X-Model-Id: ${RASA_MODEL_ID}
+
+nlg:
+  url: ${RASA_NLG_ENDPOINT_URL}
+  headers:
+    X-Model-Id: ${RASA_MODEL_ID}
+
+models:
+    url: ${RASA_MODEL_SERVER}
+    wait_time_between_pulls: null
+    headers:
+        X-Bot-Id: ${EXTERNAL_BOT_ID}
+
+tracker_store:
+    type: ${RASA_TRACKER_STORE}
+    url: ${RASA_TRACKER_STORE_URL}
+    port: ${RASA_TRACKER_STORE_PORT}
+    db: ${RASA_TRACKER_STORE_DB}
+    cluster: ${RASA_TRACKER_STORE_CLUSTER}
+    scan_count: ${RASA_TRACKER_STORE_SCAN_COUNT}
+    key_prefix: ${RASA_TRACKER_STORE_KEY_PREFIX}
+    # record_exp: ${RASA_TRACKER_STORE_EXP}
+
+    es_url: ${RASA_TRACKER_STORE_ES_URL}
+
+    health_check_interval: 20
+    retry_on_timeout: True
+    socket_connect_timeout: 5
+
+    socket_keepalive: true
+    socket_keepalive_options:
+      TCP_KEEPIDLE: 10
+      TCP_KEEPINTVL: 5
+      TCP_KEEPCNT: 3

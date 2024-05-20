@@ -18,7 +18,6 @@ import rasa.core
 from rasa.core.constants import (
     COMPRESS_ACTION_SERVER_REQUEST_ENV_NAME,
     DEFAULT_COMPRESS_ACTION_SERVER_REQUEST,
-    DEFAULT_REQUEST_TIMEOUT,
 )
 from rasa.core.policies.policy import PolicyPrediction
 from rasa.nlu.constants import (
@@ -751,7 +750,6 @@ class RemoteAction(Action):
             response: Any = await self.action_endpoint.request(
                 json=json_body,
                 method="post",
-                timeout=DEFAULT_REQUEST_TIMEOUT,
                 compress=should_compress,
             )
 

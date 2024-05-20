@@ -1,0 +1,4 @@
+redis
+redis-py-cluster
+sanic == 20.3.0
+elasticsearch

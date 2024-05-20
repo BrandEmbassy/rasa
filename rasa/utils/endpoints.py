@@ -1,8 +1,9 @@
 import ssl
-
+import copy
 import aiohttp
 import logging
 import os
+import uuid
 from aiohttp.client_exceptions import ContentTypeError
 from sanic.request import Request
 from typing import Any, Optional, Text, Dict
@@ -109,7 +110,7 @@ class EndpointConfig:
         return aiohttp.ClientSession(
             headers=self.headers,
             auth=auth,
-            timeout=aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT),
+            timeout=aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT, connect=3),
         )
 
     def combine_parameters(
@@ -140,6 +141,7 @@ class EndpointConfig:
         All additional arguments will get passed through
         to aiohttp's `session.request`.
         """
+        originalKwargs = copy.deepcopy(kwargs)
         # create the appropriate headers
         headers = {}
         if content_type:
@@ -149,7 +151,23 @@ class EndpointConfig:
             headers.update(kwargs["headers"])
             del kwargs["headers"]
 
+        if "X-Trace-ID" not in headers:
+            headers["X-Trace-ID"] = str(uuid.uuid4())
+
+        if "timeout" in kwargs:
+           del kwargs["timeout"]
+
+        if "tries" in kwargs:
+            tries = kwargs["tries"] + 1
+            del kwargs["tries"]
+        else:
+            tries = 1
+
         url = concat_url(self.url, subpath)
+
+        if tries > 3:
+            logger.error(f"[{headers['X-Trace-ID']}] Request failed after 3 tries")
+            return None
 
         sslcontext = None
         if self.cafile:
@@ -161,24 +179,31 @@ class EndpointConfig:
                     f"'{os.path.abspath(self.cafile)}' does not exist."
                 ) from e
 
-        async with self.session() as session:
-            async with session.request(
-                method,
-                url,
-                headers=headers,
-                params=self.combine_parameters(kwargs),
-                compress=compress,
-                ssl=sslcontext,
-                **kwargs,
-            ) as response:
-                if response.status >= 400:
-                    raise ClientResponseError(
-                        response.status, response.reason, await response.content.read()
-                    )
-                try:
-                    return await response.json()
-                except ContentTypeError:
-                    return None
+        try:
+            async with self.session() as session:
+                async with session.request(
+                    method,
+                    url,
+                    headers=headers,
+                    params=self.combine_parameters(kwargs),
+                    compress=compress,
+                    ssl=sslcontext,
+                    **kwargs,
+                ) as response:
+                    if response.status >= 400:
+                        raise ClientResponseError(
+                            response.status, response.reason, await response.content.read()
+                        )
+                    try:
+                        return await response.json()
+                    except ContentTypeError:
+                        return None
+        except aiohttp.ServerTimeoutError:
+            logger.warning(f"[{headers['X-Trace-ID']}] Request failed. Retry " + str(tries))
+            originalKwargs["tries"] = tries
+            originalKwargs["headers"] = headers
+            return await self.request(method, subpath, content_type, compress, **originalKwargs)
+
 
     @classmethod
     def from_dict(cls, data: Dict[Text, Any]) -> "EndpointConfig":
